@@ -20,6 +20,10 @@ p = zeros(size(X, 1), 1);
 %       information see 'help max'. If your examples are in rows, then, you
 %       can use max(A, [], 2) to obtain the max for each row.
 %
+hl1 = sigmoid(horzcat(ones(m,1),X)*Theta1');
+hl2 = sigmoid(horzcat(ones(m,1),hl1)*Theta2');
+[vals,labels] = max(hl2,[], 2);
+p = labels;
 
 
 
