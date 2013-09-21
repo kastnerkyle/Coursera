@@ -56,7 +56,7 @@ def print_simulate(dt_start, dt_end, ls_symbols, ls_allocation):
 
 #TODO: gradient ascent
 def optimal_allocation_4(dt_start, dt_end, ls_symbols):
-    #Generate all valid allocations
+    #Generate all valid allocations from 0 to 100% by 10%
     valid_alloc = pd.DataFrame(filter(lambda x: sum(x) == 1,
                                product(np.linspace(0,1,11), repeat=4)),
                                columns=map(str,range(1,5)))
