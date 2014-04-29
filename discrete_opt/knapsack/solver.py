@@ -2,38 +2,56 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-def simplex(c, A, b, t=None):
-    #http://www.ms.uky.edu/~rwalker/Class%20Work%20Solutions/class%20work%208%20solutions.pdf
-    #https://docs.google.com/presentation/d/1g2Ua2mkvZFTaLDV9lYQC7zzf7WU68vRNEtoTDieLq1Y/embed?hl=en&size=s#slide=id.g2eeb321b_0_59
-    #From Discrete Optimization course
-    while True:
-        if t is None:
-            #Tableau with cost on bottom
-            #Slack variables after main variables
-            #Contraints on the right
-            # + 1 to handle cost row, + 2 to handle bounds + "P" column
-            tableau = t = np.zeros((A.shape[0] + 1, A.shape[1] + 2))
-            t[-1, :-2] = -c
-            t[-1, -2] = 1.
-            t[:-1, :-2] = A
-            t[:-1, -1] = b
+def greedy(weights, values, bound):
+    w = 0.
+    v = 0.
+    t = np.zeros(len(weights))
+    for i in range(len(weights)):
+        if (weights[i] + w) <= bound:
+            t[i] = 1.
+            v += values[i]
+            w += weights[i]
+    return w, v, t
 
-        val = t[-1, :].min()
-        if val > -1E-6:
-            print 'Optimality reached'
-            break
+def branch(weights, values, limit, m_weights=None, m_values=None, t=[]):
+    if m_weights is None:
+        m_weights = weights.copy()
+    if m_values is None:
+        m_values = values.copy()
+    if len(m_weights):
+        tw, tv, tt = branch(weights, values, limit - weights[0],
+                            m_weights[1:], m_values[1:], t + [1])
+        nw, nv, nt = branch(weights, values, limit,
+                            m_weights[1:], m_values[1:], t + [0])
+        print tw, tv, tt
+        print nw, nv, nt
+        if tv > nv:
+            w, v, t = (tw, tv, tt)
+        else:
+            w, v, t = (nw, nv, nt)
+    else:
+        w = np.dot(weights, np.array(t))
+        v = np.dot(values, np.array(t))
+    return w, v, t
 
-        col = t[-1, :-1].argmin()
-        row = np.argmin(t[:-1, -1] / t[:-1, col])
-        t[row, :] /= t[row, col]
-        for ri in range(t.shape[0]):
-            if ri != row:
-                t[ri, :] = t[ri, :] - t[ri, col] * t[row, :]
 
-    ret = np.zeros(A.shape)
-    ret[0, col] = t[0, -1]
-    return col, ret
+def branch_and_bound(weights, values, bound):
+    #Arrange by maximum ratio
+    d = weights / values
+    si = np.argsort(d)[::-1]
+    w_s = weights[si]
+    v_s = values[si]
 
+    #Weights to invert the output of greedy solution
+    #because input is fed in sorted by weight:value ratio
+    ti = np.argsort(si)
+
+    #Get back weight and value for greedy
+    #Result needs to be resorted due to getting sorted input
+    gw, gv, t_u = greedy(w_s, v_s, bound)
+    gt = t_u[ti]
+    w, v, t = branch(weights, values, bound)
+    return w, v, t
 
 def solve_it(input_data):
     # parse the input
@@ -43,39 +61,31 @@ def solve_it(input_data):
     item_count = int(first_line[0])
     capacity = int(first_line[1])
 
-    #Value, weight
+    #values, weight
     items = np.zeros((item_count, 2))
-    for i in range(item_count):
+    for i in range(1, item_count + 1):
         line = lines[i]
         parts = line.split()
-        items[i, :] = np.array([int(parts[0]), int(parts[1])])
+        items[i - 1, :] = np.array([int(parts[0]), int(parts[1])])
 
-    value = items[:, 0]
-    weight = items[:, 1]
-    # min(-c.Tx)
-    # Ax <= b, x >= 0
-    # x = {1, 0} binary indicator
-    # c = value
-    # b = capacity
-    # A = weight
+    values = v = items[:, 0]
+    weights = w = items[:, 1]
+    bound = b = capacity
 
-    b = np.array([capacity])
-    # Add slack variables
-    c = np.hstack((value, [0]))
-    A = np.hstack((weight, [1]))[:, None].T
-    i, x = simplex(c, A, b)
-    #Remove slack variables
-    x = x.ravel()[:-1]
-    print np.dot(c[:-1], x)
+    #Trivial solution
+    #w, v, t = greedy(w, v, b)
+
+    #Better solution
+    w, v, t = branch_and_bound(w, v, b)
+
     # taken needs to be a list
     # value needs to be a list as well
-    taken = x.tolist()
-    value = value.tolist()
+    taken = t.tolist()
+    value = v
 
     # prepare the solution in the specified output format
-    output_data = ' '.join(map(lambda x: str(int(x)), value)) + \
-            ' ' + str(0) + '\n'
-    output_data += ' '.join(map(str, taken))
+    output_data = str(int(value)) + ' ' + ' ' + str(0) + '\n'
+    output_data += ' '.join(map(lambda x: str(int(x)), taken))
     return output_data
 
 
