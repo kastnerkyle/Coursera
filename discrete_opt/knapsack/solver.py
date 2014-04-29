@@ -13,6 +13,58 @@ def greedy(weights, values, limit):
             w += weights[i]
     return w, v, t
 
+def revised_simplex(minimize, penalty, limits, inequality=True, eps=1E-6):
+    #For now, translate variables to algorithmic form
+    #Good resource here
+    #www.cise.ufl.edu/research/sparse/Morgan/chapter2.htm
+    #Convention is to to multiply minimization by -1, won't solve otherwise!
+    c = -1 * np.atleast_1d(minimize)
+    A = np.atleast_2d(penalty)
+    b = np.atleast_1d(limits)
+
+    if inequality:
+        #Add slack variables
+        A = np.hstack((A, np.eye(b.shape[0])))
+        c = np.hstack((c, [0] * b.shape[0] + [1]))
+        if A.shape[0] != c.shape:
+            #Handle edge case with only 1 constraint
+            A = np.hstack((A, [[0]]))
+
+    #Really need bfs calculation here
+    basis = np.arange(b.shape[0])
+    while True:
+        #Get nonbasis columns from basis
+        nonbasis = np.arange(A.shape[1])
+        nonbasis[basis] = -1.
+        nonbasis = nonbasis[nonbasis >= 0]
+
+        #Calculate basis and nonbasis matrices
+        B = np.atleast_2d(A[:, basis])
+        V = np.atleast_2d(A[:, nonbasis])
+
+        #Calculate basis inverse
+        Binv = np.linalg.inv(B)
+        d = np.dot(Binv, b)
+        ct = c[nonbasis] - np.dot(np.dot(c[basis], Binv), V)
+
+        #Get minimum and associated index
+        j = np.argmin(ct)
+        cj = np.min(ct)
+
+        #If value >= 0, then this solution is near optimal
+        if cj >= -eps:
+            solution = np.zeros(c.shape)
+            solution[basis] = d
+            if inequality:
+                solution = solution[:len(penalty)]
+            return solution
+
+        #Find smallest positive ratio and update basis
+        w = Binv * A[:, j]
+        t = np.where(w > eps)[0]
+        r = d[t] / w[t]
+        i = np.argmin(r)
+        basis[t[i]] = j
 
 def branch(weights, values, limit, m_weights=None, m_values=None, t=[]):
     if m_weights is None:
@@ -20,10 +72,12 @@ def branch(weights, values, limit, m_weights=None, m_values=None, t=[]):
     if m_values is None:
         m_values = values.copy()
     if len(t) < len(weights):
-        tw, tv, tt = branch(weights, values, limit,
-                            m_weights[1:], m_values[1:], t + [1])
+        #Bounds check for lhs
         nw, nv, nt = branch(weights, values, limit,
                             m_weights[1:], m_values[1:], t + [0])
+        #Bounds check for rhs
+        tw, tv, tt = branch(weights, values, limit,
+                            m_weights[1:], m_values[1:], t + [1])
 
         if tv > nv and tw <= limit:
             w, v, t = (tw, tv, tt)
@@ -75,9 +129,11 @@ def solve_it(input_data):
     #Trivial solution
     #w, v, t = greedy(w, v, b)
 
+    #Revised simplex for LP
+    print revised_simplex(v, w, b)
+
     #Better solution
     w, v, t = branch_and_bound(w, v, b)
-    print w, v, t
 
     # taken needs to be a list
     # value needs to be a list as well
