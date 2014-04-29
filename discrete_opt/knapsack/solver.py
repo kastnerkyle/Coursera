@@ -2,40 +2,40 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-def greedy(weights, values, bound):
+def greedy(weights, values, limit):
     w = 0.
     v = 0.
     t = np.zeros(len(weights))
     for i in range(len(weights)):
-        if (weights[i] + w) <= bound:
-            t[i] = 1.
+        if (weights[i] + w) <= limit:
+            t[i] = 1
             v += values[i]
             w += weights[i]
     return w, v, t
+
 
 def branch(weights, values, limit, m_weights=None, m_values=None, t=[]):
     if m_weights is None:
         m_weights = weights.copy()
     if m_values is None:
         m_values = values.copy()
-    if len(m_weights):
-        tw, tv, tt = branch(weights, values, limit - weights[0],
+    if len(t) < len(weights):
+        tw, tv, tt = branch(weights, values, limit,
                             m_weights[1:], m_values[1:], t + [1])
         nw, nv, nt = branch(weights, values, limit,
                             m_weights[1:], m_values[1:], t + [0])
-        print tw, tv, tt
-        print nw, nv, nt
-        if tv > nv:
+
+        if tv > nv and tw <= limit:
             w, v, t = (tw, tv, tt)
         else:
             w, v, t = (nw, nv, nt)
     else:
         w = np.dot(weights, np.array(t))
         v = np.dot(values, np.array(t))
+        #t is already fleshed out
     return w, v, t
 
-
-def branch_and_bound(weights, values, bound):
+def branch_and_bound(weights, values, limit):
     #Arrange by maximum ratio
     d = weights / values
     si = np.argsort(d)[::-1]
@@ -48,9 +48,9 @@ def branch_and_bound(weights, values, bound):
 
     #Get back weight and value for greedy
     #Result needs to be resorted due to getting sorted input
-    gw, gv, t_u = greedy(w_s, v_s, bound)
+    gw, gv, t_u = greedy(w_s, v_s, limit)
     gt = t_u[ti]
-    w, v, t = branch(weights, values, bound)
+    w, v, t = branch(weights, values, limit)
     return w, v, t
 
 def solve_it(input_data):
@@ -77,10 +77,11 @@ def solve_it(input_data):
 
     #Better solution
     w, v, t = branch_and_bound(w, v, b)
+    print w, v, t
 
     # taken needs to be a list
     # value needs to be a list as well
-    taken = t.tolist()
+    taken = t
     value = v
 
     # prepare the solution in the specified output format
