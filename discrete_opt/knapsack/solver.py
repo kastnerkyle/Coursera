@@ -3,6 +3,7 @@
 
 import numpy as np
 def greedy(weights, values, limit):
+    #Take items in order until full
     w = 0.
     v = 0.
     t = np.zeros(len(weights))
@@ -13,24 +14,41 @@ def greedy(weights, values, limit):
             w += weights[i]
     return w, v, t
 
-def revised_simplex(minimize, penalty, limits, inequality=True, eps=1E-6):
+def greedy_ratio(weights, values, limit):
+    #Arrange by maximum ratio
+    d = weights / values
+    si = np.argsort(d)[::-1]
+    w_s = weights[si]
+    v_s = values[si]
+
+    #Weights to invert the output of greedy solution
+    #because input is fed in sorted by weight:value ratio
+    ti = np.argsort(si)
+
+    #Get back weight and value for greedy ratio
+    #Result needs to be resorted due to getting sorted input
+    w, v, t_u = greedy(w_s, v_s, limit)
+    t = t_u[ti]
+    return w, v, t
+
+def revised_simplex(penalty, minimize, limits, inequality=True, eps=1E-6):
     #For now, translate variables to algorithmic form
     #Good resource here
     #www.cise.ufl.edu/research/sparse/Morgan/chapter2.htm
-    #Convention is to to multiply minimization by -1, won't solve otherwise!
+    #Multiply by -1 or won't solve!
     c = -1 * np.atleast_1d(minimize)
     A = np.atleast_2d(penalty)
     b = np.atleast_1d(limits)
 
     if inequality:
-        #Add slack variables
+        #Add slack variables since limit specifies an inequality
         A = np.hstack((A, np.eye(b.shape[0])))
         c = np.hstack((c, [0] * b.shape[0] + [1]))
         if A.shape[0] != c.shape:
             #Handle edge case with only 1 constraint
             A = np.hstack((A, [[0]]))
 
-    #Really need bfs calculation here
+    #Really need best feasible solution calculation here
     basis = np.arange(b.shape[0])
     while True:
         #Get nonbasis columns from basis
@@ -53,11 +71,13 @@ def revised_simplex(minimize, penalty, limits, inequality=True, eps=1E-6):
 
         #If value >= 0, then this solution is near optimal
         if cj >= -eps:
-            solution = np.zeros(c.shape)
-            solution[basis] = d
+            t = np.zeros(c.shape)
+            t[basis] = d
             if inequality:
-                solution = solution[:len(penalty)]
-            return solution
+                t = t[:len(penalty)]
+            w = np.dot(penalty, t)
+            v = np.dot(minimize, t)
+            return w, v, t
 
         #Find smallest positive ratio and update basis
         w = Binv * A[:, j]
@@ -66,18 +86,19 @@ def revised_simplex(minimize, penalty, limits, inequality=True, eps=1E-6):
         i = np.argmin(r)
         basis[t[i]] = j
 
-def branch(weights, values, limit, m_weights=None, m_values=None, t=[]):
+def branch_and_bound(weights, values, limit,
+                     m_weights=None, m_values=None, t=[]):
     if m_weights is None:
         m_weights = weights.copy()
     if m_values is None:
         m_values = values.copy()
     if len(t) < len(weights):
         #Bounds check for lhs
-        nw, nv, nt = branch(weights, values, limit,
-                            m_weights[1:], m_values[1:], t + [0])
+        nw, nv, nt = branch_and_bound(weights, values, limit,
+                             m_weights[1:], m_values[1:], t + [0])
         #Bounds check for rhs
-        tw, tv, tt = branch(weights, values, limit,
-                            m_weights[1:], m_values[1:], t + [1])
+        tw, tv, tt = branch_and_bound(weights, values, limit,
+                             m_weights[1:], m_values[1:], t + [1])
 
         if tv > nv and tw <= limit:
             w, v, t = (tw, tv, tt)
@@ -87,24 +108,6 @@ def branch(weights, values, limit, m_weights=None, m_values=None, t=[]):
         w = np.dot(weights, np.array(t))
         v = np.dot(values, np.array(t))
         #t is already fleshed out
-    return w, v, t
-
-def branch_and_bound(weights, values, limit):
-    #Arrange by maximum ratio
-    d = weights / values
-    si = np.argsort(d)[::-1]
-    w_s = weights[si]
-    v_s = values[si]
-
-    #Weights to invert the output of greedy solution
-    #because input is fed in sorted by weight:value ratio
-    ti = np.argsort(si)
-
-    #Get back weight and value for greedy
-    #Result needs to be resorted due to getting sorted input
-    gw, gv, t_u = greedy(w_s, v_s, limit)
-    gt = t_u[ti]
-    w, v, t = branch(weights, values, limit)
     return w, v, t
 
 def solve_it(input_data):
@@ -129,8 +132,11 @@ def solve_it(input_data):
     #Trivial solution
     #w, v, t = greedy(w, v, b)
 
+    #Almost trivial solution
+    #w, v, t = greedy_ratio(w, v, b)
+
     #Revised simplex for LP
-    print revised_simplex(v, w, b)
+    print revised_simplex(w, v, b)
 
     #Better solution
     w, v, t = branch_and_bound(w, v, b)
